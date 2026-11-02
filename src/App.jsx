@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import Header from './components/Header';
 import ProductSearch from './components/ProductSearch';
 import ProductList from './components/ProductList';
-import { getProducts } from './services/productsApi';
+import ProductDetails from './components/ProductDetails';
+import { getProducts, getProductById } from './services/productsApi';
 import './App.css';
 
 export default function App() {
@@ -10,6 +11,10 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedId, setSelectedId] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,6 +44,43 @@ export default function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (selectedId === null) return;
+
+    const controller = new AbortController();
+
+    async function loadDetails() {
+      setDetailsLoading(true);
+      setDetailsError('');
+      setSelectedProduct(null);
+
+      try {
+        const data = await getProductById(selectedId, {
+          signal: controller.signal
+        });
+        setSelectedProduct(data);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setDetailsError(err.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setDetailsLoading(false);
+        }
+      }
+    }
+
+    loadDetails();
+    return () => controller.abort();
+  }, [selectedId]);
+
+  function closeDetails() {
+    setSelectedId(null);
+    setSelectedProduct(null);
+    setDetailsError('');
+    setDetailsLoading(false);
+  }
+
   // Na API da turma, o nome do produto está no campo "descricao" (não existe "nome")
   const filteredProducts = products.filter((product) =>
     product.descricao.toLocaleLowerCase('pt-BR').includes(
@@ -55,8 +97,19 @@ export default function App() {
       {!loading && !error && (
         <>
           <p>{filteredProducts.length} produto(s) encontrado(s).</p>
-          <ProductList products={filteredProducts} />
+          <ProductList
+            products={filteredProducts}
+            onViewDetails={setSelectedId}
+          />
         </>
+      )}
+      {selectedId !== null && (
+        <ProductDetails
+          product={selectedProduct}
+          loading={detailsLoading}
+          error={detailsError}
+          onClose={closeDetails}
+        />
       )}
     </main>
   );
