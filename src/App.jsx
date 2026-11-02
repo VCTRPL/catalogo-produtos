@@ -1,15 +1,47 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Header from './components/Header';
 import ProductSearch from './components/ProductSearch';
 import ProductList from './components/ProductList';
-import { initialProducts } from './data/products';
+import { getProducts } from './services/productsApi';
 import './App.css';
 
 export default function App() {
+  const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const filteredProducts = initialProducts.filter((product) =>
-    product.nome.toLocaleLowerCase('pt-BR').includes(
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProducts() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const data = await getProducts({ signal: controller.signal });
+        if (!Array.isArray(data)) {
+          throw new Error('A API não retornou uma lista de produtos.');
+        }
+        setProducts(data);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError(err.message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProducts();
+    return () => controller.abort();
+  }, []);
+
+  // Na API da turma, o nome do produto está no campo "descricao" (não existe "nome")
+  const filteredProducts = products.filter((product) =>
+    product.descricao.toLocaleLowerCase('pt-BR').includes(
       search.toLocaleLowerCase('pt-BR')
     )
   );
@@ -18,8 +50,14 @@ export default function App() {
     <main className="container">
       <Header />
       <ProductSearch value={search} onSearchChange={setSearch} />
-      <p>{filteredProducts.length} produto(s) encontrado(s).</p>
-      <ProductList products={filteredProducts} />
+      {loading && <p role="status">Carregando produtos...</p>}
+      {error && <p role="alert" className="error">{error}</p>}
+      {!loading && !error && (
+        <>
+          <p>{filteredProducts.length} produto(s) encontrado(s).</p>
+          <ProductList products={filteredProducts} />
+        </>
+      )}
     </main>
   );
 }
